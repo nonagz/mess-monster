@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Each couple is one household. Only its two members can read or write it and everything under it.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isMember(hid) {
+      return signedIn() && request.auth.uid in get(/databases/$(database)/documents/households/$(hid)).data.members;
+    }
+
+    // users/{uid}: which household this account belongs to. Only the account itself.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // invites/{code}: maps a 6-character invite code to a household id.
+    // Anyone signed in may look up one exact code (no listing), only members create or remove them.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if isMember(request.resource.data.householdId);
+      allow delete: if isMember(resource.data.householdId);
+      allow update: if false;
+    }
+
+    match /households/{hid} {
+      allow create: if signedIn() && request.resource.data.members == [request.auth.uid];
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow delete: if false;
+      allow update: if signedIn() && (
+        // a member updates the game; membership stays the same
+        (request.auth.uid in resource.data.members
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode)
+        // someone with the invite joins: only adds themselves, at most two members
+        || (!(request.auth.uid in resource.data.members)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+          && resource.data.members.size() < 2
+          && request.resource.data.members == resource.data.members.concat([request.auth.uid]))
+        // a member leaves: only removes themselves
+        || (request.auth.uid in resource.data.members
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+          && request.resource.data.members == resource.data.members.removeAll([request.auth.uid]))
+      );
+
+      // marks (who did which chore), pings (cheers), weeks (saved week history)
+      match /{sub=**} {
+        allow read, write: if isMember(hid);
+      }
+    }
+  }
+}
