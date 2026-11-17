@@ -50,7 +50,22 @@ input:focus{outline:none;box-shadow:0 0 0 3px var(--gold)}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 
 header{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--paper);border:3px solid var(--ink);border-radius:20px;box-shadow:0 5px 0 var(--ink);padding:10px 14px}
-.logo{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
+.logo>div{min-width:0}
+.logo h1,.logo .sub{overflow:hidden;text-overflow:ellipsis}
+.hbtns{flex:none}
+.me-ini{display:none}
+@media (max-width:520px){
+  .me{padding:0;width:40px;height:40px;justify-content:center;border-radius:12px}
+  .me .me-name,.me .dot{display:none}
+  .me .me-ini{display:block;font-family:var(--f-display);font-size:18px;font-style:normal}
+  header{padding:8px 10px}
+  .hbtns{gap:5px}
+  .hbtns .icon{width:36px;height:36px}
+  .me{width:36px;height:36px}
+  .logo svg{display:none}
+  .logo h1{font-size:20px}
+}
 .logo svg{flex:none;animation:wob 3s ease-in-out infinite}
 @keyframes wob{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg) translateY(-2px)}}
 .logo h1{font-size:24px;white-space:nowrap}
@@ -262,6 +277,18 @@ footer span{font-variant-numeric:tabular-nums}
 .demo-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--ink);color:var(--gold);border-radius:14px;padding:8px 12px;font-size:13px;font-weight:700}
 .demo-bar button{color:var(--ink);background:var(--gold);border-radius:10px;padding:4px 10px;font-weight:800}
 .avatar-img{width:26px;height:26px;border-radius:50%;border:2px solid var(--ink)}
+
+/* swipe to deal */
+.card{touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.card.dragging{cursor:grabbing;transition:none;animation:none}
+.swipe-label{position:absolute;top:14px;font-family:var(--f-display);font-size:22px;padding:2px 12px;border:3px solid currentColor;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .1s;background:var(--paper);z-index:2}
+.sl-0{left:14px;color:var(--pa);transform:rotate(-12deg)}
+.sl-1{right:14px;color:var(--pb);transform:rotate(12deg)}
+.sl-2{left:50%;top:auto;bottom:14px;color:var(--pj);transform:translateX(-50%)}
+.swipe-hint{font-size:12px;color:rgba(255,255,255,.9);text-align:center;font-weight:500;margin:0}
+.groupall{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.92);border:2.5px solid var(--ink);border-radius:12px;padding:8px 12px;font-size:14px;font-weight:500;cursor:pointer;width:100%;box-sizing:border-box}
+.groupall input{width:20px;height:20px;flex:none;accent-color:var(--pj)}
+.glabel{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.03em;margin-top:4px}
 
 #app.still .panel,#app.still .chip,#app.still .deck-edit li{animation:none}
 .card.still{animation:none}

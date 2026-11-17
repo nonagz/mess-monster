@@ -34,12 +34,19 @@ function freshGame() {
 }
 const pickGame = d => { const g = {}; GAME_KEYS.forEach(k => { g[k] = d[k] === undefined ? null : d[k]; }); if (!g.history) g.history = {}; if (!g.weekChores) g.weekChores = []; if (!g.seats) g.seats = [null,null]; return g; };
 
+/* ================= sound vs. the phone's silent mode =================
+   Web pages can't read Android's ringer/silent mode. Safari (iOS/macOS) exposes navigator.audioSession:
+   the "ambient" type makes our sounds obey the iPhone's silent switch, so sound can default to on there.
+   Everywhere else sound starts off until the player turns it on, and that choice is remembered. */
+const followsSilentSwitch = (() => { try { if (navigator.audioSession) { navigator.audioSession.type = 'ambient'; return true; } } catch (e) {} return false; })();
+function initialMuted(){ const saved = ls.get('mm-muted'); if (saved === '1') return true; if (saved === '0') return false; return !followsSilentSwitch; }
+
 /* ================= app state ================= */
 let S = null;          // the couple's shared game state
 let U = null;          // signed-in user {uid, name, photo}
 let HID = null;        // household id
 const ui = { mode:'boot', house:{ inviteCode:'', members:[] }, edit:null, err:'', status:'', confirm:null, combo:{n:0,t:0}, post:[],
-  wasDone:null, doneWeek:null, victoryPlaying:false, intro:false, rewardOpen:false, prev:{}, muted:ls.get('mm-muted')==='1',
+  wasDone:null, doneWeek:null, victoryPlaying:false, intro:false, rewardOpen:false, prev:{}, muted:initialMuted(),
   view:'game', weeks:[], joinCode:(params.get('join')||'').toUpperCase(), busy:false, joinName:'' };
 const app = document.getElementById('app');
 app.dir = 'rtl'; app.lang = 'he';
@@ -193,7 +200,29 @@ async function archiveWeek(){
 
 /* ================= game logic ================= */
 function shuffle(a){a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a;}
-function startDraft(){ S.draft={deck:shuffle(S.chores).map(c=>({id:c.id,name:c.name,pts:c.pts})),idx:0}; S.weekChores=[]; S.phase='draft'; S.weekStart=null; ui.confirm=null; ui.rewardOpen=false; }
+/* related chores travel together: same group = adjacent in the deck and listed together during the week */
+const GROUPS=[
+  {id:'kitchen',name:'מטבח וכלים',re:/כלים|מדיח|מטבח|משטח|כיריים|תנור|מקרר|מיקרוגל/},
+  {id:'cooking',name:'בישול',re:/בישול|ארוח|ארוחה/},
+  {id:'laundry',name:'כביסה',re:/כביס|גיהוץ|מגהץ/},
+  {id:'floors',name:'רצפות ואבק',re:/אבק|רצפ|ספונג|שואב|טאטוא/},
+  {id:'bath',name:'שירותים ומקלחת',re:/שירות|אמבט|מקלחת|כיור/},
+  {id:'shopping',name:'קניות',re:/קני|סופר|מכולת/},
+  {id:'trash',name:'זבל ומחזור',re:/זבל|מחזור|פחי/},
+  {id:'bedding',name:'מצעים ומגבות',re:/מצע|מגבת|מגבות/},
+  {id:'green',name:'צמחים וחיות',re:/עציצ|גינה|השקי|כלב|חתול|חיית/}
+];
+const GROUP_ORDER=GROUPS.map(g=>g.id);
+function groupOf(c){ if(c.group) return c.group; const g=GROUPS.find(g=>g.re.test(c.name||'')); return g?g.id:'other'; }
+const groupName=id=>(GROUPS.find(g=>g.id===id)||{name:'שונות'}).name;
+const byGroup=(a,b)=>{const ga=GROUP_ORDER.indexOf(groupOf(a)), gb=GROUP_ORDER.indexOf(groupOf(b)); return (ga<0?99:ga)-(gb<0?99:gb);};
+function groupedShuffle(chores){
+  const buckets=new Map();
+  chores.forEach(c=>{ const g=groupOf(c); const key=g==='other'?'other-'+c.id:g; if(!buckets.has(key)) buckets.set(key,[]); buckets.get(key).push(c); });
+  return shuffle([...buckets.values()]).flatMap(b=>shuffle(b));
+}
+function groupRun(deck,idx){ const g=groupOf(deck[idx]); if(g==='other') return 1; let n=0; for(let i=idx;i<deck.length&&groupOf(deck[i])===g;i++) n++; return n; }
+function startDraft(){ S.draft={deck:groupedShuffle(S.chores).map(c=>({id:c.id,name:c.name,pts:c.pts,group:groupOf(c)})),idx:0}; S.weekChores=[]; S.phase='draft'; S.weekStart=null; ui.confirm=null; ui.rewardOpen=false; ui.groupAll=false; }
 function totals(list){const t=[0,0,0]; list.forEach(c=>{if(c.owner>=0) t[c.owner]+=c.pts}); return t;}
 function soloTotal(){ const d=S.draft; if(!d) return 0; const taken=new Map(S.weekChores.map(c=>[c.id,c.owner])); return d.deck.reduce((s,c)=>{const o=taken.get(c.id); return s+((o===-1||o===2)?0:c.pts)},0); }
 const zoneFor=t=>Math.max(2,Math.round(t*.12));
@@ -423,6 +452,9 @@ function viewDraft(){
   const d=S.draft, N=d.deck.length, t=totals(S.weekChores), total=soloTotal();
   if(d.idx<N){
     const c=d.deck[d.idx], left=N-d.idx, cardKey=S.week+'-'+d.idx, sameCard=ui.lastCard===cardKey; ui.lastCard=cardKey;
+    const g=groupOf(c); let gStart=d.idx; while(g!=='other'&&gStart>0&&groupOf(d.deck[gStart-1])===g) gStart--;
+    const gTotal=g==='other'?1:groupRun(d.deck,gStart), gPos=d.idx-gStart+1, gLeft=groupRun(d.deck,d.idx);
+    const tag=g==='other'?(c.pts>=4?'מטלה כבדה':c.pts<=1?'מטלה קלה':'מטלה'):`${groupName(g)}${gTotal>1?` · ${gPos} מתוך ${gTotal}`:''}`;
     return `
     ${invitePanel()}
     <p class="eyebrow" style="color:#fff">חלוקת שבוע ${S.week} · קלף ${d.idx+1} מתוך ${N}</p>
@@ -432,7 +464,8 @@ function viewDraft(){
         ${left>2?'<div class="ghostcard" style="transform:translate(8px,10px) rotate(4deg)"></div>':''}
         ${left>1?'<div class="ghostcard" style="transform:translate(-6px,5px) rotate(-3deg)"></div>':''}
         <div class="card ${sameCard?'still':''}" id="card">
-          <span class="tag">${c.pts>=4?'מטלה כבדה':c.pts<=1?'מטלה קלה':'מטלה'}</span>
+          <span class="swipe-label sl-0" aria-hidden="true">${esc(P(0))}</span><span class="swipe-label sl-1" aria-hidden="true">${esc(P(1))}</span><span class="swipe-label sl-2" aria-hidden="true">ביחד</span>
+          <span class="tag">${esc(tag)}</span>
           <h2>${esc(c.name)}</h2>
           ${pips(c.pts)}
           <span class="step"><button data-act="dpt" data-d="-1" aria-label="פחות נקודות">−</button><output>${c.pts}</output><button data-act="dpt" data-d="1" aria-label="יותר נקודות">+</button></span>
@@ -444,6 +477,8 @@ function viewDraft(){
         <button class="btn bpj" data-act="take" data-o="2">ביחד<small>שנינו</small></button>
         <button class="btn bpb" data-act="take" data-o="1">${esc(P(1))}<small>לוקח/ת</small></button>
       </div>
+      ${gLeft>1?`<label class="groupall"><input type="checkbox" id="groupall" data-act="groupall" ${ui.groupAll?'checked':''}> לחלק יחד את כל ${gLeft} מטלות ה${esc(groupName(g))} שנשארו</label>`:''}
+      <p class="swipe-hint">אפשר גם להחליק: ימינה ל${esc(P(0))}, שמאלה ל${esc(P(1))}, למעלה לשניכם ביחד</p>
       <div class="minor">
         <button class="btn small" data-act="take" data-o="-1">לא צריך השבוע</button>
         <button class="btn small" data-act="undo" ${d.idx===0?'disabled':''}>ביטול הקלף הקודם</button>
@@ -451,7 +486,7 @@ function viewDraft(){
     </div>`;
   }
   const bal=Math.abs(t[0]-t[1])<=zoneFor(total), assigned=S.weekChores.filter(c=>c.owner>=0);
-  const grp=i=>{const items=assigned.filter(c=>c.owner===i); return `<div class="grp"><h3 style="color:${PCOL[i]}">${i===2?'ביחד':esc(P(i))} <small>${t[i]} נק׳</small></h3><div class="chips">
+  const grp=i=>{const items=assigned.filter(c=>c.owner===i).sort(byGroup); return `<div class="grp"><h3 style="color:${PCOL[i]}">${i===2?'ביחד':esc(P(i))} <small>${t[i]} נק׳</small></h3><div class="chips">
     ${items.map(c=>`<button class="chip" data-act="move" data-id="${c.id}">${esc(c.name)} <b>${c.pts}</b></button>`).join('')||'<span class="hint">אין מטלות</span>'}</div></div>`;};
   return `
   <section class="panel">
@@ -484,7 +519,8 @@ function viewWeek(){
     } else { box=`<span class="box" style="${s.done?`background:${PCOL[s.by]}`:''}">${s.done?'✓':''}</span>`;
       if(s.done&&s.by!==c.owner) note=`<span class="note" style="color:var(--warn)">❤️ ${esc(P(s.by))} עזר/ה</span>`; }
     return `<button class="task ${joint?'joint':''} ${s.done?'done':''} ${cls}" data-act="mark" data-id="${c.id}" aria-pressed="${s.done}">${box}<span class="n">${esc(c.name)}</span><span class="p">−${c.pts}</span>${note}</button>`;};
-  const group=(title,items,col)=>items.length?`<div class="grp"><h3 style="color:${col}">${title} <small>${items.filter(c=>st(c).done).length}/${items.length}</small></h3><div class="tasks">${items.map(task).join('')}</div></div>`:'';
+  const withLabels=items=>{ let last=null; return items.slice().sort(byGroup).map(c=>{ const g=groupOf(c); const lab=g!==last&&g!=='other'&&items.filter(x=>groupOf(x)===g).length>1?`<span class="glabel">${esc(groupName(g))}</span>`:''; last=g; return lab+task(c); }).join(''); };
+  const group=(title,items,col)=>items.length?`<div class="grp"><h3 style="color:${col}">${title} <small>${items.filter(c=>st(c).done).length}/${items.length}</small></h3><div class="tasks">${withLabels(items)}</div></div>`:'';
   const mine=ws.list.filter(c=>c.owner===me), joint=ws.list.filter(c=>c.owner===2), theirs=ws.list.filter(c=>c.owner===1-me);
   return `
   ${invitePanel()}
@@ -587,7 +623,7 @@ function render(){
   <header>
     <div class="logo">${logo()}<div><h1>מפלצת הבלגן</h1><p class="sub">${esc(sub)}</p></div></div>
     <div class="hbtns">
-      ${me!==null&&S.phase!=='setup'?`<span class="me" style="background:${me?'var(--pb-soft)':'var(--pa-soft)'}"><i class="dot" style="background:${PCOL[me]}"></i>${esc(P(me))}</span>`:''}
+      ${me!==null&&S.phase!=='setup'?`<span class="me" title="${esc(P(me))}" aria-label="משחק/ת בתור ${esc(P(me))}" style="background:${me?'var(--pb-soft)':'var(--pa-soft)'};color:${PCOL[me]}"><i class="dot" style="background:${PCOL[me]}"></i><span class="me-name" style="color:var(--ink)">${esc(P(me))}</span><i class="me-ini" aria-hidden="true">${esc(P(me).slice(0,1).toUpperCase())}</i></span>`:''}
       <button class="btn icon" data-act="mute" aria-label="${ui.muted?'הפעלת צלילים':'השתקת צלילים'}">${ui.muted?'🔇':'🔊'}</button>
       ${inGame&&me!==null&&S.phase!=='setup'&&!ui.edit?`<button class="btn icon" data-act="history" aria-label="היסטוריה">📜</button><button class="btn icon" data-act="settings" aria-label="הגדרות">⚙️</button>`:''}
     </div>
@@ -619,6 +655,54 @@ function flyCard(owner){
   const anim=f.animate([{transform:'none',opacity:1},{transform:`translate(${dx}px,${dy}px) scale(.15) rotate(${owner===0?40:owner===1?-40:0}deg)`,opacity:.6}],{duration:reduced?1:420,easing:'cubic-bezier(.5,-0.3,.7,1)'});
   anim.onfinish=()=>{f.remove(); const c=target?center(target):[innerWidth/2,innerHeight/2]; burst(c[0],c[1],[PHEX[owner]||'#fff','#fff','#FFC93C'],14,{rmax:7,up:200});};
 }
+/* deal the current card (or its whole group) to an owner: 0/1 = a player, 2 = together, -1 = not this week */
+function takeCard(o,fly){
+  const d=S.draft, c=d&&d.deck[d.idx]; if(!c) return false;
+  if(fly&&o>=0) flyCard(o);
+  sfx.whoosh(); buzz(15);
+  const tBefore=totals(S.weekChores);
+  const n=ui.groupAll?groupRun(d.deck,d.idx):1;
+  for(let k=0;k<n;k++){ const x=d.deck[d.idx]; S.weekChores.push({id:x.id,name:x.name,pts:x.pts,owner:o,group:groupOf(x)}); d.idx++; }
+  (d.batches||(d.batches=[])).push(n);
+  if(n>1){ ui.groupAll=false; toast('📦',`${n} מטלות ${groupName(groupOf(c))} חולקו יחד`); }
+  ui.bump=o>=0&&o<2?o:null;
+  const t=totals(S.weekChores);
+  setTimeout(sfx.flip,180);
+  if(o>=0&&o<2&&t[0]===t[1]&&t[0]>0&&tBefore[0]!==tBefore[1]) setTimeout(()=>{banner('מאוזן בדיוק!'); sfx.chime();},350);
+  if(d.idx===d.deck.length) setTimeout(()=>{ if(Math.abs(t[0]-t[1])<=zoneFor(soloTotal())){ sfx.chime(); confettiBurstTop('cheer'); } else sfx.sad(); },400);
+  return true;
+}
+
+/* Tinder-style swipe on the dealt card: right = player A, left = player B, up = together.
+   Directions are physical (screen) directions, matching where each player's button sits in the RTL layout. */
+let swipe=null;
+app.addEventListener('pointerdown',ev=>{
+  const card=ev.target.closest('#card'); if(!card||ev.target.closest('button,input')||ev.button>0) return;
+  swipe={card,x:ev.clientX,y:ev.clientY,dx:0,dy:0,id:ev.pointerId,moved:false};
+  card.classList.add('dragging'); try{card.setPointerCapture(ev.pointerId)}catch(e){}
+});
+app.addEventListener('pointermove',ev=>{
+  if(!swipe||ev.pointerId!==swipe.id) return;
+  swipe.dx=ev.clientX-swipe.x; swipe.dy=ev.clientY-swipe.y;
+  if(Math.abs(swipe.dx)+Math.abs(swipe.dy)>6) swipe.moved=true;
+  const dir=swipeDir(swipe.dx,swipe.dy,40);
+  swipe.card.style.transform=`translate(${swipe.dx}px,${Math.min(swipe.dy,40)}px) rotate(${swipe.dx/18}deg)`;
+  swipe.card.querySelectorAll('.swipe-label').forEach(l=>l.style.opacity=l.classList.contains('sl-'+dir)?String(Math.min(1,(Math.max(Math.abs(swipe.dx),-swipe.dy)-30)/70)):'0');
+});
+function swipeDir(dx,dy,min){ if(-dy>Math.abs(dx)&&-dy>min) return 2; if(dx>min) return 0; if(dx<-min) return 1; return null; }
+function endSwipe(ev){
+  if(!swipe||ev.pointerId!==swipe.id) return;
+  const s=swipe; swipe=null; s.card.classList.remove('dragging');
+  const dir=swipeDir(s.dx,s.dy,100);
+  if(dir===null){ s.card.style.transform=''; s.card.querySelectorAll('.swipe-label').forEach(l=>l.style.opacity='0'); return; }
+  const outX=dir===0?innerWidth:dir===1?-innerWidth:s.dx, outY=dir===2?-innerHeight:s.dy;
+  s.card.style.transition='transform .28s ease-in'; s.card.style.transform=`translate(${outX}px,${outY}px) rotate(${dir===2?0:outX/25}deg)`;
+  const target=document.querySelector(`[data-act="take"][data-o="${dir}"]`);
+  setTimeout(()=>{ if(target){const c=center(target); burst(c[0],c[1],[PHEX[dir],'#fff','#FFC93C'],14,{rmax:7,up:200});} if(takeCard(dir,false)){ save(); ensureSubs(); render(); } },220);
+}
+app.addEventListener('pointerup',endSwipe);
+app.addEventListener('pointercancel',ev=>{ if(swipe&&ev.pointerId===swipe.id){ swipe.card.classList.remove('dragging'); swipe.card.style.transform=''; swipe=null; } });
+
 const inviteLink=()=>location.origin+location.pathname+'?'+(DEMO?'demo=1&':'')+'join='+encodeURIComponent(ui.house.inviteCode);
 
 app.addEventListener('click',async ev=>{
@@ -670,19 +754,9 @@ app.addEventListener('click',async ev=>{
       ui.edit=null; ui.err=''; break;
     }
     case 'dpt': {const c=S.draft.deck[S.draft.idx]; if(c) c.pts=clamp(c.pts+dd,1,5); sfx.tap(); break;}
-    case 'take': {
-      const d=S.draft, c=d.deck[d.idx]; if(!c) return;
-      if(o>=0) flyCard(o); sfx.whoosh(); buzz(15);
-      const tBefore=totals(S.weekChores);
-      S.weekChores.push({id:c.id,name:c.name,pts:c.pts,owner:o}); d.idx++;
-      ui.bump=o>=0&&o<2?o:null;
-      const t=totals(S.weekChores);
-      setTimeout(sfx.flip,180);
-      if(o>=0&&o<2&&t[0]===t[1]&&t[0]>0&&tBefore[0]!==tBefore[1]) setTimeout(()=>{banner('מאוזן בדיוק!'); sfx.chime();},350);
-      if(d.idx===d.deck.length) setTimeout(()=>{ if(Math.abs(t[0]-t[1])<=zoneFor(soloTotal())){ sfx.chime(); confettiBurstTop('cheer'); } else sfx.sad(); },400);
-      break;
-    }
-    case 'undo': { const d=S.draft; if(!d||d.idx===0) return; d.idx--; const cid=d.deck[d.idx].id; S.weekChores=S.weekChores.filter(c=>c.id!==cid); sfx.tap(); break; }
+    case 'take': if(!takeCard(o,true)) return; break;
+    case 'groupall': ui.groupAll=b.checked; persist=false; sfx.tap(); break;
+    case 'undo': { const d=S.draft; if(!d||d.idx===0) return; const n=Math.min(d.idx,(d.batches&&d.batches.length)?d.batches.pop():1); for(let k=0;k<n;k++){ d.idx--; const cid=d.deck[d.idx].id; S.weekChores=S.weekChores.filter(c=>c.id!==cid); } sfx.tap(); break; }
     case 'move': { const c=S.weekChores.find(x=>x.id===id); if(c&&c.owner>=0) c.owner=c.owner===0?1:c.owner===1?2:0; sfx.pop(); const r=center(b); burst(r[0],r[1],[PHEX[c.owner],'#fff'],10,{rmax:6}); break; }
     case 'startweek': S.weekChores=S.weekChores.filter(c=>c.owner>=0); S.draft=null; S.phase='week'; S.weekStart=Date.now(); ui.intro=true; ui.prev={}; ui.doneWeek=null; break;
     case 'mark': { const c=S.weekChores.find(x=>x.id===id); if(c) await mark(c,b); return; }
