@@ -290,6 +290,73 @@ footer span{font-variant-numeric:tabular-nums}
 .groupall input{width:20px;height:20px;flex:none;accent-color:var(--pj)}
 .glabel{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.03em;margin-top:4px}
 
+/* v0.3: callouts, catalog rows, profile, split meter, panes, per-time tasks */
+.callout{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:2.5px solid var(--ink);border-radius:14px;text-align:start;width:100%;box-sizing:border-box}
+.callout b{font-family:var(--f-display);font-weight:400;font-size:18px}
+.callout span{font-size:14px;line-height:1.5}
+.callout.ok{background:var(--ok-soft)} .callout.ok b{color:var(--ok)}
+.callout.insight{background:var(--gold);box-shadow:0 4px 0 var(--ink)}
+button.chip.q{font-size:14px}
+button.chip.q.on{background:var(--ok-soft);font-weight:700}
+.totals{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:var(--paper-2);border-radius:12px;padding:8px 12px;font-size:13px}
+.totals span{color:var(--muted)}
+.gh{font-family:var(--f-body);font-size:13px;font-weight:700;color:var(--muted);margin:6px 0 -4px}
+.clist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.crow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:2px solid var(--ink);border-radius:12px;padding:8px 10px;background:var(--paper)}
+.crow.off{background:var(--paper-2)} .crow.off .cname{color:var(--muted)}
+.crow.na{opacity:.5;border-style:dashed}
+.cname{flex:1 1 140px;min-width:0;display:flex;flex-direction:column;font-size:14px;font-weight:500}
+.cname small{font-size:11px;color:var(--muted);font-weight:500}
+.tog{width:42px;height:24px;border-radius:99px;border:2px solid var(--ink);background:var(--paper-2);position:relative;flex:none;padding:0}
+.tog i{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:var(--paper);border:1.5px solid var(--ink);transition:right .15s}
+.tog.on{background:var(--ok)} .tog.on i{right:20px}
+.mini{display:inline-flex;align-items:center;background:var(--paper-2);border:2px solid var(--ink);border-radius:10px;flex:none}
+.mini button{width:26px;height:28px;font-size:16px;font-weight:700}
+.mini b{min-width:30px;text-align:center;font-size:13px;font-variant-numeric:tabular-nums}
+.mini.big button{width:36px;height:36px;font-size:20px} .mini.big b{font-size:18px;min-width:36px}
+.addrow input{text-transform:none;letter-spacing:normal;font-weight:400;text-align:start;font-size:15px}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:500}
+.prefs{display:flex;flex-direction:column;gap:10px}
+.pref{display:flex;flex-direction:column;gap:6px}
+.pref b{font-size:15px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--paper-2);border:2.5px solid var(--ink);border-radius:12px;padding:4px}
+.seg button{padding:8px 4px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted)}
+.seg button.sel{border:2px solid var(--ink);font-weight:800}
+.seg button.sel.strong{background:var(--ok-soft);color:var(--ok)} .seg button.sel.neutral{background:var(--paper);color:var(--ink)} .seg button.sel.avoid{background:var(--warn-soft);color:var(--warn)}
+.split{display:flex;flex-direction:column;gap:6px}
+.split-top{display:flex;justify-content:space-between;align-items:baseline;font-weight:700}
+.split-top small{font-size:12px;color:var(--muted);font-weight:500;margin:0 6px}
+.split-top .num{font-family:var(--f-display);font-size:30px;line-height:1;display:inline-block}
+.sbar{display:flex;height:22px;border:3px solid var(--ink);border-radius:99px;overflow:hidden;direction:rtl;background:var(--paper-2)}
+.sbar i{display:block;height:100%;transition:width .5s cubic-bezier(.25,1.4,.5,1)}
+.sbar i+i{border-inline-start:3px solid var(--ink)}
+.cmeta{font-size:13px;color:var(--muted);margin:0}
+.cardsteps{display:flex;gap:8px;justify-content:center}
+.hints{display:flex;flex-direction:column;gap:5px;align-items:center}
+.hint-pill{font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;border:2px solid currentColor}
+.hint-pill.ok{background:var(--ok-soft);color:var(--ok)} .hint-pill.warn{background:var(--warn-soft);color:var(--warn)}
+.stack{height:300px}
+.take.two{grid-template-columns:1fr 1fr}
+.take .btn:not(.bpa):not(.bpb){color:var(--ink)}
+.pane{display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center;background:var(--paper);border:3px solid var(--ink);border-radius:16px;padding:12px;width:100%;box-sizing:border-box;box-shadow:0 4px 0 var(--ink)}
+.pane .hint{font-size:13px}
+.splitrow{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+.nudge{font-weight:700;font-size:14px;color:var(--warn);margin:0}
+.nudge.ok{color:var(--ok)}
+.task2{display:flex;flex-direction:column;gap:8px;background:var(--paper);border:2.5px solid var(--ink);border-radius:14px;padding:10px 12px;box-shadow:0 4px 0 var(--ink)}
+.task2.done{background:var(--paper-2);box-shadow:0 2px 0 var(--ink)}
+.t-top{display:flex;align-items:center;gap:10px}
+.t-name{flex:1;min-width:0;display:flex;flex-direction:column;font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.t-name small{font-size:12px;color:var(--muted)}
+.task2.done .t-name{text-decoration:line-through;color:var(--muted)}
+.plus{flex:none;min-width:58px;height:40px;padding:0 10px;border:2.5px solid var(--ink);border-radius:11px;background:var(--gold);font-family:var(--f-display);font-size:15px;box-shadow:0 3px 0 var(--ink)}
+.plus:active:not(:disabled){transform:translateY(3px);box-shadow:none}
+.plus:disabled{background:var(--paper-2);opacity:1}
+.minus{flex:none;width:32px;height:32px;border:2px solid var(--ink);border-radius:9px;font-size:18px;font-weight:700;background:var(--paper)}
+.segs{display:flex;gap:3px}
+.segs i{flex:1;height:7px;border-radius:4px;background:var(--paper-2);border:1px solid rgba(22,22,31,.25)}
+button.me{cursor:pointer;font:inherit}
+
 #app.still .panel,#app.still .chip,#app.still .deck-edit li{animation:none}
 .card.still{animation:none}
 @media (max-width:420px){.logo h1{font-size:20px}.take .btn{font-size:14px}.card h2{font-size:26px}}
